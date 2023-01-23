@@ -16,6 +16,8 @@ class MFCCEncoder(nn.Module):
         self.fc = nn.Linear(hidden_dim * lstm_layers, output_dim)
 
     def forward(self, x, input_lengths):
+        if len(x.shape) < 3:
+            x = x.unsqueeze(0)
         x = self.feature_extractor(x)
         # x = nn.utils.rnn.pack_padded_sequence(x, input_lengths // (2 * self.feature_extractor_depth), batch_first=True,
         #                                       enforce_sorted=False)
@@ -54,4 +56,6 @@ class CNNFeatureExtractor(nn.Module):
     def forward(self, x):
         for i in range(self.depth):
             x = self.cbr_list[i](x)
+            if len(x.shape) < 3:
+                x = x.unsqueeze(0)
         return x

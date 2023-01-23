@@ -25,19 +25,22 @@ char_map = {c: i for i, c in enumerate(list("- abcdefghijklmnopqrstuvwxyz"))}
 
 
 class WavDataset(Dataset):
-    def __init__(self, path: str, preprocess='mfcc', max_length=800, max_characters=50, sr: int = 16000,
+    def __init__(self, path: str, preprocess: bool = True, max_length=800, max_characters=50, sr: int = 16000,
                  n_mfcc=20, n_fft=512,
                  hop_length=160, device='cpu'):
         self.max_length = max_length
         self.max_characters = max_characters
         self.path = path
-        self.files = list(Path(self.path).rglob('*.wav'))
+        if Path(self.path).is_dir():
+            self.files = list(Path(self.path).rglob('*.wav'))
+        else:
+            self.files = [Path(path)]
         self.sr = sr
         self.n_mfcc = n_mfcc
         self.n_fft = n_fft
         self.hop_length = hop_length
         self.device = device
-        if preprocess == 'mfcc':
+        if preprocess:
             self.preprocess = Compose(
                 [MFCC(sr=self.sr, n_mfcc=self.n_mfcc, n_fft=self.n_fft, hop_length=self.hop_length),
                  Pad(self.max_length),
