@@ -2,6 +2,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from torchaudio.pipelines import Wav2Vec2Bundle, WAV2VEC2_BASE
+
+from src.datasets.wav_dataset import char_map, WavDataset
+
 
 class MFCCEncoder(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, feature_extractor_depth=1, lstm_layers=1):
@@ -15,19 +19,13 @@ class MFCCEncoder(nn.Module):
                             num_layers=lstm_layers)
         self.fc = nn.Linear(hidden_dim * lstm_layers, output_dim)
 
-    def forward(self, x, input_lengths):
+    def forward(self, x):
         if len(x.shape) < 3:
             x = x.unsqueeze(0)
         x = self.feature_extractor(x)
-        # x = nn.utils.rnn.pack_padded_sequence(x, input_lengths // (2 * self.feature_extractor_depth), batch_first=True,
-        #                                       enforce_sorted=False)
-        # pack = True
-        # if x.data.shape[0] == 1:
-        #     x = x.data.squeeze(0)
-        #     pack = False
+
         x, _ = self.lstm(x)
-        # if pack:
-        #     x, _ = nn.utils.rnn.pad_packed_sequence(x, batch_first=True)
+
         x = self.fc(x)
         return x
 
@@ -59,3 +57,29 @@ class CNNFeatureExtractor(nn.Module):
             if len(x.shape) < 3:
                 x = x.unsqueeze(0)
         return x
+
+
+class WAV2VECEncoder(nn.Module):
+    def __init__(self):
+        super(WAV2VECEncoder, self).__init__()
+        self.wav2vec = WAV2VEC2_BASE.get_model()
+        self.wav2vec.eval()
+
+        self.lstm = nn.LSTM(768, 50, batch_first=True, bidirectional=True,
+                            num_layers=1)
+
+        self.fc = nn.Linear(in_features=100, out_features=len(char_map))
+
+    def forward(self, x):
+        with torch.no_grad():
+            x, _ = self.wav2vec(x)
+        x, _ = self.lstm(x)
+        x = self.fc(x)
+        return x
+
+
+if __name__ == '__main__':
+    num_classes = len(char_map)
+    train_dataset = WavDataset(path='/home/tomk42/PycharmProjects/SpeechSignalsEx3/train', preprocess=False)
+
+    print(WAV2VECEncoder()(train_dataset[0]['audio'].unsqueeze(0))[0])

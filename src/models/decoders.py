@@ -3,37 +3,9 @@ from torch import nn
 from torch.nn import functional as F
 from typing import List
 
-from torchaudio.models.decoder import CTCDecoderLM, CTCDecoderLMState
+from torchaudio.models.decoder import CTCDecoderLM, CTCDecoderLMState, ctc_decoder
 
-
-class CustomLM(CTCDecoderLM):
-    def __init__(self, language_model: nn.Module):
-        CTCDecoderLM.__init__(self)
-        self.language_model = language_model
-        self.sil = -1  # index for silent token in the language model
-        self.states = {}
-
-        language_model.eval()
-
-    def start(self, start_with_nothing: bool = False):
-        state = CTCDecoderLMState()
-        with torch.no_grad():
-            score = self.language_model(self.sil)
-
-        self.states[state] = score
-        return state
-
-    def score(self, state: CTCDecoderLMState, token_index: int):
-        outstate = state.child(token_index)
-        if outstate not in self.states:
-            score = self.language_model(token_index)
-            self.states[outstate] = score
-        score = self.states[outstate]
-
-        return outstate, score
-
-    def finish(self, state: CTCDecoderLMState):
-        return self.score(state, self.sil)
+from src.datasets.wav_dataset import char_map, letter_to_word_dict
 
 
 class GreedyCTCDecoder(torch.nn.Module):
@@ -57,3 +29,22 @@ class GreedyCTCDecoder(torch.nn.Module):
         return joined.strip().split()
 
 
+class BeamSearchDecoder:
+    def __init__(self, use_lm=True, beam_size=5):
+        if use_lm:
+            self.lm_path = '/home/tomk42/PycharmProjects/SpeechSignalsEx3/6gram.arpa'
+        else:
+            self.lm_path = None
+        self.tokens = list(char_map.keys())
+        self.tokens[1] = '|'
+        self.decoder = ctc_decoder(
+            lexicon='/home/tomk42/PycharmProjects/SpeechSignalsEx3/lexicon.txt',
+            tokens=self.tokens,
+            lm=self.lm_path,
+            beam_size=beam_size
+        )
+
+    def __call__(self, emission):
+        letters_list = self.decoder(emission.unsqueeze(0))[0][0].words
+        words = ' '.join([letter_to_word_dict[l] for l in letters_list])
+        return words
